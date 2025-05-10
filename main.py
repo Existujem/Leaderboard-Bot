@@ -6,7 +6,7 @@ from discord.ext import commands, tasks
 from collections import defaultdict
 import json
 
-# === Flask server to stay alive (for UptimeRobot) ===
+# === Flask server to stay alive ===
 app = Flask('')
 
 @app.route('/')
@@ -30,32 +30,15 @@ intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-message_counts = defaultdict(int)
-DATA_FILE = "message_counts.json"
-
 # Load message counts
-def load_message_counts():
-    global message_counts
-    try:
-        with open(DATA_FILE, "r") as f:
-            data = json.load(f)
-            message_counts.update({int(k): int(v) for k, v in data.items()})
-        print("Loaded message counts.")
-    except FileNotFoundError:
-        print("No message_counts.json found. Starting fresh.")
-    except Exception as e:
-        print(f"Error loading message counts: {e}")
+message_counts = defaultdict(int)
+if os.path.exists("message_counts.json"):
+    with open("message_counts.json", "r") as f:
+        data = json.load(f)
+        for user_id, count in data.items():
+            message_counts[int(user_id)] = count
 
-# Save message counts
-def save_message_counts():
-    try:
-        with open(DATA_FILE, "w") as f:
-            json.dump(message_counts, f)
-        print("Saved message counts.")
-    except Exception as e:
-        print(f"Error saving message counts: {e}")
-
-# Replace with your server and channel ID
+# Your actual guild and channel IDs
 GUILD_ID = 1367427041565212732
 CHANNEL_ID = 1368220767459872799
 leaderboard_message = None
@@ -70,7 +53,6 @@ async def on_message(message):
     if message.author.bot:
         return
     message_counts[message.author.id] += 1
-    save_message_counts()
     await bot.process_commands(message)
 
 @tasks.loop(minutes=5)
@@ -95,8 +77,11 @@ async def update_leaderboard():
     else:
         leaderboard_message = await channel.send(embed=embed)
 
+    # Save updated data
+    with open("message_counts.json", "w") as f:
+        json.dump({str(user_id): count for user_id, count in message_counts.items()}, f)
+
 # === Run Bot ===
 keep_alive()
-load_message_counts()
 token = os.environ.get("TOKEN")
 bot.run(token)
